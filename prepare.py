@@ -4,68 +4,106 @@
 # In[ ]:
 
 
+import numpy as np
 import pandas as pd
-import os
-from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import OrdinalEncoder
 
 
-# Load the Iris dataset
-iris = pd.read_csv('iris.csv')
-iris = acquire.get_iris_data()
-
-# Split the Iris dataset into training, testing, and validation sets
-train, validate, test = split_data(iris)
-
-# Load the Titanic dataset
-titanic = pd.read_csv('titanic.csv')
-titanic = acquire.get_titanic_data()
-
-# Split the Titanic dataset into training, testing, and validation sets
-train, validate, test = split_data(titanic)
-
-# Load the Telco dataset
-telco_churn = pd.read_csv('telco_churn.csv')
-telco_churn = acquire.get_telco_data()
-# Split the Telco dataset into training, testing, and validation sets
-train, validate, test = split_data(telco_churn)
+def detect_column_types(df):
+    """
+    Returns a dictionary with column names grouped by their data types.
+    """
+    column_info = df.dtypes.groupby(df.dtypes).groups
+    column_groups = {}
+    for dtype, column_list in column_info.items():
+        column_groups[dtype] = column_list.tolist()
+    return column_groups
 
 
-def split_data(df):
-    # Split the data into training, testing, and validation sets
-    train, test = train_test_split(df, test_size=0.2, random_state=123)
-    train, validate = train_test_split(train, test_size=0.25, random_state=123)
-    return train, validate, test
+def clean_data(df):
+    """
+    Cleans the dataset by lowercase column names, removing nulls, and dropping unnecessary columns.
+    """
+    df.columns = df.columns.str.lower()
+    df = df.dropna()
+    columns_to_drop = ['customerid']
+    df.drop(columns_to_drop, axis=1, inplace=True)
+    return df
 
 
-def prep_iris(iris):
-    # Drop the 'species_id' and 'measurement_id' columns
-    iris = iris.drop(['species_id', 'measurement_id'], axis=1)
-    # Rename the 'species_name' column to 'species'
-    iris = iris.rename(columns={'species_name': 'species'})
-    # Create dummy variables of the 'species' column
-    species_dummies = pd.get_dummies(iris['species'], prefix='species')
-    # Concatenate the dummy variables onto the original DataFrame
-    iris = pd.concat([iris, species_dummies], axis=1)
-    return iris
+def encode_categorical_columns(df, categorical_columns, encoding_method='ordinal'):
+    """
+    Encodes categorical columns using the specified encoding method.
+    """
+    if encoding_method == 'ordinal':
+        encoder = OrdinalEncoder()
+        df[categorical_columns] = encoder.fit_transform(df[categorical_columns])
+    # Add other encoding methods if needed
+    return df
 
 
-def prep_telco(telco_churn):
-    # Drop unnecessary columns
-    telco_churn = telco_churn.drop(['customerID', 'gender', 'Partner', 'Dependents', 'PhoneService',          'MultipleLines', 'OnlineSecurity', 'OnlineBackup', 'DeviceProtection', 'TechSupport', 'StreamingTV',      'StreamingMovies', 'PaperlessBilling', 'PaymentMethod'], axis=1)
-    # Encode categorical columns using dummy variables
-    telco = pd.get_dummies(telco, columns=['InternetService', 'Contract'])
-    return telco_churn
+def change_numerical_columns_datatype(df, numerical_columns, datatype='float64'):
+    """
+    Changes the datatype of numerical columns.
+    """
+    for column in numerical_columns:
+        df[column] = df[column].astype(datatype)
+    return df
 
 
-def prep_titanic(titanic):
-    # Drop the unnecessary columns
-    titanic = titanic.drop(['PassengerId', 'Name', 'Ticket', 'Cabin'], axis=1)
-    # Create dummy variables of the categorical columns
-    sex_dummies = pd.get_dummies(titanic['Sex'], prefix='sex')
-    embarked_dummies = pd.get_dummies(titanic['Embarked'], prefix='embarked')
-    pclass_dummies = pd.get_dummies(titanic['Pclass'], prefix='pclass')
-    # Concatenate the dummy variables onto the original DataFrame
-    titanic = pd.concat([titanic, sex_dummies, embarked_dummies, pclass_dummies], axis=1)
-    # Drop the original categorical columns
-    titanic = titanic.drop(['Sex', 'Embarked', 'Pclass'], axis=1)
-    return titanic
+def encode_binary_columns(df, columns, encoding_method='ordinal'):
+    """
+    Encodes binary columns using the specified encoding method.
+    """
+    if encoding_method == 'ordinal':
+        for col in columns:
+            unique_values = df[col].unique()
+            value_map = {value: i for i, value in enumerate(unique_values)}
+            df[col] = df[col].replace(value_map).astype(int)
+    # Add other encoding methods as needed
+    return df
+
+def get_numerical_columns(df):
+    """
+    Returns a list of column names for numerical columns.
+    """
+    numerical_columns = list(df.select_dtypes(include=[np.number]).columns)
+    return numerical_columns
+
+def get_categorical_columns(df):
+    """
+    Returns a list of column names containing categorical data in the given DataFrame.
+    """
+    object_columns = df.select_dtypes(include=['object']).columns.to_list()
+    boolean_columns = df.select_dtypes(include=['bool']).columns.to_list()
+    categorical_columns = object_columns + boolean_columns
+    return categorical_columns
+
+def prepare_telco_data(df):
+    """
+    Prepares the telco customer churn dataset for modeling by cleaning the data and encoding categorical and binary features.
+    """
+    # Clean the data
+    df = clean_data(df)
+
+    # Group columns by data types
+    column_groups = detect_column_types(df)
+    object_columns = column_groups[np.dtype('object')]
+    int_columns = column_groups[np.dtype('int64')]
+    float_columns = column_groups[np.dtype('float64')]
+
+    # Identify binary, categorical, and numerical columns
+    binary_columns = [col for col in object_columns if df[col].nunique() == 2]
+    categorical_columns = [col for col in object_columns if df[col].nunique() > 2]
+    numerical_columns = column_groups[np.dtype('int64')] + column_groups[np.dtype('float64')]
+
+    # Encode categorical and binary columns
+    df = encode_categorical_columns(df, categorical_columns)
+    df = encode_binary_columns(df, binary_columns)
+
+    # Change the datatype of numerical columns
+    df = change_numerical_columns_datatype(df, numerical_columns)
+
+    
+    return df, categorical_columns
+
