@@ -79,7 +79,7 @@ def get_categorical_columns(df):
     categorical_columns = object_columns + boolean_columns
     return categorical_columns
 
-def prepare_telco_data(df):
+def prepare_data(df):
     """
     Prepares the telco customer churn dataset for modeling by cleaning the data and encoding categorical and binary features.
     """
